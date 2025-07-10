@@ -18,5 +18,4 @@ A cryptocurrency research assistant powered by OpenAI GPT-4 Turbo with live mark
 - `OPENAI_API_KEY`: Your OpenAI API key
 - `FLASK_ENV`: Set to 'production' for deployment
 
-## Live Demo
-[Your Render URL here]
+## Live Demo: https://abids-crypto-bot.onrender.com
