@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoBot - Advanced Crypto Research Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 1200px;
+            height: 700px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .powered-by {
+            font-size: 12px;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .chat-section {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e0e0e0;
+        }
+
+        .sidebar {
+            flex: 1;
+            background: #f8f9fa;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .chat-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.bot {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-field {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            min-width: 80px;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 10px;
+            font-style: italic;
+            color: #666;
+            text-align: center;
+        }
+
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .suggestion {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 8px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s ease;
+        }
+
+        .suggestion:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .sidebar-section {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .sidebar-section h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quick-action {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            text-decoration: none;
+            color: #333;
+        }
+
+        .quick-action:hover {
+            background: #e9ecef;
+            transform: translateX(2px);
+        }
+
+        .market-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .market-item:last-child {
+            border-bottom: none;
+        }
+
+        .crypto-icon {
+            font-size: 24px;
+        }
+
+        .error-message {
+            background: #ff6b6b;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .success-message {
+            background: #51cf66;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #51cf66;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .chat-section {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span class="crypto-icon">₿</span> CryptoBot</h1>
+            <p>Advanced Crypto Research Assistant with Live Market Data</p>
+            <div class="powered-by">
+                <span class="status-indicator"></span>
+                Powered by OpenAI GPT-4 Turbo
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chat-section">
+                <div class="chat-container" id="chatContainer">
+                    <div class="message bot">
+                        <div class="message-content">
+                            Welcome to CryptoBot! 🚀 I'm your advanced crypto research assistant powered by GPT-4 Turbo with live market data integration.
+                            
+                            I can help you with:
+                            • Cryptocurrency analysis and price predictions
+                            • DeFi protocols and yield farming strategies  
+                            • NFT market trends and valuations
+                            • Trading strategies and risk management
+                            • Blockchain technology explanations
+                            • Regulatory news and compliance
+                            
+                            What would you like to research today?
+                            <div class="suggestions">
+                                <div class="suggestion" onclick="sendSuggestion('Analyze Bitcoin price trends')">Bitcoin Analysis</div>
+                                <div class="suggestion" onclick="sendSuggestion('Explain DeFi yield farming')">DeFi Strategies</div>
+                                <div class="suggestion" onclick="sendSuggestion('Top altcoins to watch in 2024')">Altcoin Research</div>
+                                <div class="suggestion" onclick="sendSuggestion('NFT market outlook')">NFT Trends</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="typing-indicator" id="typingIndicator">
+                    CryptoBot is researching... 🤖📈
+                </div>
+                
+                <div class="input-container">
+                    <input type="text" class="input-field" id="messageInput" placeholder="Ask about crypto, DeFi, NFTs, trading strategies..." />
+                    <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>🚀 Quick Research</h3>
+                    <button class="quick-action" onclick="sendSuggestion('Bitcoin price prediction analysis')">
+                        ₿ Bitcoin Price Analysis
+                    </button>
+                    <button class="quick-action" onclick="sendSuggestion('Ethereum DeFi ecosystem overview')">
+                        🔷 Ethereum DeFi
+                    </button>
+                    <button class="quick-action" onclick="sendSuggestion('Best crypto trading strategies')">
+                        📊 Trading Strategies
+                    </button>
+                    <button class="quick-action" onclick="sendSuggestion('Layer 2 solutions comparison')">
+                        🔗 Layer 2 Solutions
+                    </button>
+                    <button class="quick-action" onclick="sendSuggestion('Crypto market sentiment analysis')">
+                        📈 Market Sentiment
+                    </button>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h3>💰 Market Overview</h3>
+                    <div id="marketData">
+                        <div class="market-item">
+                            <span>Bitcoin (BTC)</span>
+                            <span style="color: #f7931a;">$43,250</span>
+                        </div>
+                        <div class="market-item">
+                            <span>Ethereum (ETH)</span>
+                            <span style="color: #627eea;">$2,680</span>
+                        </div>
+                        <div class="market-item">
+                            <span>Market Cap</span>
+                            <span style="color: #28a745;">$1.7T</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 12px;">
+                            <button onclick="loadMarketData()" style="background: none; border: 1px solid #ddd; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                🔄 Refresh Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sidebar-section">
+                    <h3>🎯 Categories</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <div style="text-align: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 20px; margin-bottom: 4px;">🪙</div>
+                            <div style="font-size: 11px; color: #666;">Cryptocurrencies</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 20px; margin-bottom: 4px;">🔄</div>
+                            <div style="font-size: 11px; color: #666;">DeFi</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 20px; margin-bottom: 4px;">🎨</div>
+                            <div style="font-size: 11px; color: #666;">NFTs</div>
+                        </div>
+                        <div style="text-align: center; padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                            <div style="font-size: 20px; margin-bottom: 4px;">📊</div>
+                            <div style="font-size: 11px; color: #666;">Trading</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const typingIndicator = document.getElementById('typingIndicator');
+        let conversationHistory = [];
+
+        function addMessage(content, isUser = false, isError = false, isSuccess = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
+            
+            const contentDiv = document.createElement('div');
+            if (isError) {
+                contentDiv.className = 'error-message';
+            } else if (isSuccess) {
+                contentDiv.className = 'success-message';
+            } else {
+                contentDiv.className = 'message-content';
+            }
+            
+            // Format content with basic markdown support
+            const formattedContent = formatMessage(content);
+            contentDiv.innerHTML = formattedContent;
+            
+            messageDiv.appendChild(contentDiv);
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function formatMessage(content) {
+            return content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">$1</code>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function showTyping() {
+            typingIndicator.style.display = 'block';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideTyping() {
+            typingIndicator.style.display = 'none';
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            sendButton.disabled = true;
+            addMessage(message, true);
+            
+            // Add to conversation history
+            conversationHistory.push({role: 'user', content: message});
+            
+            messageInput.value = '';
+            showTyping();
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        message: message,
+                        history: conversationHistory
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addMessage(data.response, false);
+                    conversationHistory.push({role: 'assistant', content: data.response});
+                } else {
+                    addMessage(data.error || 'Sorry, there was an error. Please try again.', false, true);
+                }
+            } catch (error) {
+                addMessage('Sorry, there was an error connecting to the AI. Please try again.', false, true);
+                console.error('Error:', error);
+            } finally {
+                hideTyping();
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        function sendSuggestion(suggestion) {
+            messageInput.value = suggestion;
+            sendMessage();
+        }
+
+        async function loadMarketData() {
+            try {
+                const response = await fetch('/api/market-data');
+                const data = await response.json();
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    const marketDataDiv = document.getElementById('marketData');
+                    let html = '';
+                    
+                    // Show top 3 cryptocurrencies
+                    for (let i = 0; i < Math.min(3, data.data.length); i++) {
+                        const crypto = data.data[i];
+                        const changeClass = crypto.price_change_percentage_24h > 0 ? 'color: #28a745' : 'color: #dc3545';
+                        html += `
+                            <div class="market-item">
+                                <span>${crypto.name} (${crypto.symbol.toUpperCase()})</span>
+                                <span style="${changeClass}">$${crypto.current_price.toLocaleString()}</span>
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
+                        <div class="market-item">
+                            <span>Total Market Cap</span>
+                            <span style="color: #28a745;">$${(data.data.reduce((sum, c) => sum + c.market_cap, 0) / 1e12).toFixed(1)}T</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 12px;">
+                            <button onclick="loadMarketData()" style="background: none; border: 1px solid #ddd; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                                🔄 Refresh Data
+                            </button>
+                        </div>
+                    `;
+                    
+                    marketDataDiv.innerHTML = html;
+                    addMessage('Market data updated successfully!', false, false, true);
+                }
+            } catch (error) {
+                console.error('Error loading market data:', error);
+                addMessage('Failed to load market data. Using cached data.', false, true);
+            }
+        }
+
+        // Event listeners
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        messageInput.addEventListener('input', function() {
+            sendButton.disabled = !this.value.trim();
+        });
+
+        // Initialize
+        window.addEventListener('load', function() {
+            messageInput.focus();
+            // Load market data on startup
+            setTimeout(loadMarketData, 1000);
+        });
+    </script>
+</body>
