@@ -1,8 +1,8 @@
-# Crypto Research Bot with OpenAI API
+# Enhanced Crypto Research Bot with Streaming & Fast Responses
 # Requirements: pip install flask openai python-dotenv requests flask-cors gunicorn
 
 import os
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, Response
 from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -10,6 +10,18 @@ import json
 import requests
 from datetime import datetime
 import logging
+import re
+import random
+
+# Import configuration constants
+from config import (
+    COINGECKO_API_BASE, OPENAI_MODEL, MAX_TOKENS, TEMPERATURE, 
+    PRESENCE_PENALTY, FREQUENCY_PENALTY, MAX_HISTORY_MESSAGES,
+    API_TIMEOUT, MARKET_DATA_TIMEOUT, GREETING_PATTERNS,
+    CRYPTO_GREETING_RESPONSES, CRYPTO_KEYWORDS, CRYPTO_SYSTEM_PROMPT,
+    MARKET_DATA_PARAMS, CRYPTO_DETAIL_PARAMS, PRICE_DATA_PARAMS,
+    ERROR_MESSAGES, SUCCESS_MESSAGES, APP_INFO
+)
 
 # Load environment variables
 load_dotenv()
@@ -22,62 +34,35 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+try:
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+except Exception as e:
+    logger.error(f"Failed to initialize OpenAI client: {e}")
+    client = None
 
-# Crypto-focused system prompt with latest knowledge
-CRYPTO_SYSTEM_PROMPT = """You are CryptoBot, an advanced cryptocurrency research assistant powered by GPT-4 Turbo. You specialize in:
+def is_simple_greeting(message):
+    """Check if message is a simple greeting"""
+    message_lower = message.lower().strip()
+    return any(re.match(pattern, message_lower) for pattern in GREETING_PATTERNS)
 
-CRYPTOCURRENCY KNOWLEDGE:
-- All cryptocurrencies (Bitcoin, Ethereum, altcoins, meme coins)
-- Market analysis and price predictions
-- Technical analysis and trading strategies
-- Fundamental analysis and tokenomics
-- Regulatory news and compliance
+def get_crypto_greeting():
+    """Get a random crypto-themed greeting response"""
+    return random.choice(CRYPTO_GREETING_RESPONSES)
 
-DEFI & BLOCKCHAIN:
-- DeFi protocols and yield farming
-- Smart contracts and dApps
-- Layer 1 and Layer 2 solutions
-- Cross-chain bridges and interoperability
-- Staking and governance tokens
-
-TRADING & INVESTMENT:
-- Risk management strategies
-- Portfolio diversification
-- Market cycles and sentiment analysis
-- On-chain analytics and metrics
-- Derivatives and futures trading
-
-NFT & WEB3:
-- NFT marketplaces and collections
-- Utility and gaming tokens
-- Metaverse and virtual worlds
-- Web3 infrastructure and tools
-
-MARKET DATA:
-- Real-time price analysis
-- Volume and liquidity analysis
-- Market cap and dominance trends
-- Fear & Greed Index interpretation
-- Macro economic impacts
-
-Provide accurate, up-to-date, and actionable insights. Always include risk warnings for investment advice. Use current data when possible and be specific about timeframes and market conditions. Keep responses informative yet accessible to both beginners and advanced users."""
-
-# CoinGecko API for live data (free tier)
-COINGECKO_API_BASE = "https://api.coingecko.com/api/v3"
+def create_error_response(message, status_code=500):
+    """Create standardized error response"""
+    logger.error(f"Error: {message}")
+    return jsonify({
+        "error": message,
+        "success": False,
+        "timestamp": datetime.now().isoformat()
+    }), status_code
 
 def get_crypto_data(crypto_id="bitcoin"):
     """Fetch live crypto data from CoinGecko API"""
     try:
         url = f"{COINGECKO_API_BASE}/simple/price"
-        params = {
-            "ids": crypto_id,
-            "vs_currencies": "usd",
-            "include_market_cap": "true",
-            "include_24hr_vol": "true",
-            "include_24hr_change": "true"
-        }
-        response = requests.get(url, params=params, timeout=5)
+        response = requests.get(url, params={**PRICE_DATA_PARAMS, "ids": crypto_id}, timeout=MARKET_DATA_TIMEOUT)
         return response.json()
     except Exception as e:
         logger.error(f"Error fetching crypto data: {str(e)}")
@@ -87,11 +72,65 @@ def get_market_overview():
     """Get overall crypto market data"""
     try:
         url = f"{COINGECKO_API_BASE}/global"
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=MARKET_DATA_TIMEOUT)
         return response.json()
     except Exception as e:
         logger.error(f"Error fetching market data: {str(e)}")
         return None
+
+def enhance_message_with_data(message):
+    """Add live market data to crypto-related messages"""
+    try:
+        enhanced_message = message
+        if any(crypto in message.lower() for crypto in CRYPTO_KEYWORDS):
+            market_data = get_market_overview()
+            if market_data and 'data' in market_data:
+                data = market_data['data']
+                total_cap = data.get('total_market_cap', {}).get('usd', 0)
+                total_vol = data.get('total_volume', {}).get('usd', 0)
+                enhanced_message += f"\n\nLive Market Data: Total Market Cap: ${total_cap:,.0f}, 24h Vol: ${total_vol:,.0f}"
+        return enhanced_message
+    except Exception as e:
+        logger.error(f"Error enhancing message: {e}")
+        return message
+
+def stream_chat_response(messages):
+    """Stream response from OpenAI API"""
+    try:
+        if not client:
+            yield f"data: {json.dumps({'error': ERROR_MESSAGES['client_not_initialized'], 'success': False})}\n\n"
+            return
+
+        # Create streaming request
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=messages,
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
+            presence_penalty=PRESENCE_PENALTY,
+            frequency_penalty=FREQUENCY_PENALTY,
+            stream=True
+        )
+        
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                data = json.dumps({
+                    "content": content,
+                    "success": True
+                })
+                yield f"data: {data}\n\n"
+        
+        # Send completion signal
+        yield f"data: {json.dumps({'done': True, 'success': True})}\n\n"
+        
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        error_data = json.dumps({
+            "error": f"Streaming error: {str(e)}",
+            "success": False
+        })
+        yield f"data: {error_data}\n\n"
 
 @app.route('/')
 def index():
@@ -99,43 +138,52 @@ def index():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    """Standard chat endpoint (non-streaming)"""
     try:
         data = request.json
         user_message = data.get('message', '')
         conversation_history = data.get('history', [])
         
         if not user_message:
-            return jsonify({'error': 'No message provided', 'success': False}), 400
+            return create_error_response(ERROR_MESSAGES['no_message'], 400)
         
         # Check if API key is set
         if not os.getenv('OPENAI_API_KEY'):
-            return jsonify({'error': 'API key not configured. Please set OPENAI_API_KEY environment variable.', 'success': False}), 500
+            return create_error_response(ERROR_MESSAGES['api_key_missing'], 500)
+        
+        if not client:
+            return create_error_response(ERROR_MESSAGES['client_not_initialized'], 500)
+        
+        # Quick response for simple greetings
+        if is_simple_greeting(user_message):
+            return jsonify({
+                'response': get_crypto_greeting(),
+                'success': True,
+                'model': 'instant-response',
+                'timestamp': datetime.now().isoformat()
+            })
         
         # Enhance message with live data if crypto-specific
-        enhanced_message = user_message
-        if any(crypto in user_message.lower() for crypto in ['bitcoin', 'btc', 'ethereum', 'eth', 'price', 'market']):
-            market_data = get_market_overview()
-            if market_data:
-                enhanced_message += f"\n\nLive Market Data: Total Market Cap: ${market_data.get('data', {}).get('total_market_cap', {}).get('usd', 0):,.0f}, 24h Vol: ${market_data.get('data', {}).get('total_volume', {}).get('usd', 0):,.0f}"
+        enhanced_message = enhance_message_with_data(user_message)
         
         # Build conversation context
         messages = [{"role": "system", "content": CRYPTO_SYSTEM_PROMPT}]
         
         # Add conversation history (last 10 messages)
-        for msg in conversation_history[-10:]:
+        for msg in conversation_history[-MAX_HISTORY_MESSAGES:]:
             messages.append({"role": msg["role"], "content": msg["content"]})
         
         # Add current message
         messages.append({"role": "user", "content": enhanced_message})
         
-        # Make request to OpenAI API with latest model
+        # Make request to OpenAI API
         response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",  # Latest GPT-4 Turbo model
+            model=OPENAI_MODEL,
             messages=messages,
-            max_tokens=1500,
-            temperature=0.7,
-            presence_penalty=0.1,
-            frequency_penalty=0.1
+            max_tokens=MAX_TOKENS,
+            temperature=TEMPERATURE,
+            presence_penalty=PRESENCE_PENALTY,
+            frequency_penalty=FREQUENCY_PENALTY
         )
         
         ai_response = response.choices[0].message.content
@@ -143,13 +191,75 @@ def chat():
         return jsonify({
             'response': ai_response,
             'success': True,
-            'model': 'gpt-4-turbo-preview',
+            'model': OPENAI_MODEL,
             'timestamp': datetime.now().isoformat()
         })
         
     except Exception as e:
         logger.error(f"Chat error: {str(e)}")
-        return jsonify({'error': f'An error occurred: {str(e)}', 'success': False}), 500
+        return create_error_response(f'Chat error: {str(e)}', 500)
+
+@app.route('/api/chat/stream', methods=['POST'])
+def chat_stream():
+    """Streaming chat endpoint"""
+    try:
+        data = request.json
+        user_message = data.get('message', '')
+        conversation_history = data.get('history', [])
+        
+        if not user_message:
+            return create_error_response(ERROR_MESSAGES['no_message'], 400)
+        
+        # Check if API key is set
+        if not os.getenv('OPENAI_API_KEY'):
+            return create_error_response(ERROR_MESSAGES['api_key_missing'], 500)
+        
+        if not client:
+            return create_error_response(ERROR_MESSAGES['client_not_initialized'], 500)
+        
+        # Quick response for simple greetings
+        if is_simple_greeting(user_message):
+            def quick_greeting():
+                response = get_crypto_greeting()
+                data = json.dumps({"content": response, "success": True})
+                yield f"data: {data}\n\n"
+                yield f"data: {json.dumps({'done': True, 'success': True})}\n\n"
+            
+            return Response(
+                quick_greeting(),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                }
+            )
+        
+        # Enhance message with live data
+        enhanced_message = enhance_message_with_data(user_message)
+        
+        # Build conversation context
+        messages = [{"role": "system", "content": CRYPTO_SYSTEM_PROMPT}]
+        
+        # Add conversation history (last 10 messages)
+        for msg in conversation_history[-MAX_HISTORY_MESSAGES:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # Add current message
+        messages.append({"role": "user", "content": enhanced_message})
+        
+        # Stream response
+        return Response(
+            stream_chat_response(messages),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Stream error: {e}")
+        return create_error_response(f'Stream error: {str(e)}', 500)
 
 @app.route('/api/market-data')
 def market_data():
@@ -157,14 +267,11 @@ def market_data():
     try:
         # Get top cryptocurrencies
         url = f"{COINGECKO_API_BASE}/coins/markets"
-        params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 10,
-            "page": 1,
-            "sparkline": "false"
-        }
-        response = requests.get(url, params=params, timeout=5)
+        response = requests.get(url, params=MARKET_DATA_PARAMS, timeout=MARKET_DATA_TIMEOUT)
+        
+        if response.status_code != 200:
+            return create_error_response(f'{ERROR_MESSAGES["api_error"]}: {response.status_code}', 502)
+        
         data = response.json()
         
         return jsonify({
@@ -173,14 +280,44 @@ def market_data():
             'timestamp': datetime.now().isoformat()
         })
         
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Market data request error: {str(e)}")
+        return create_error_response(f'{ERROR_MESSAGES["network_error"]}', 502)
     except Exception as e:
         logger.error(f"Market data error: {str(e)}")
-        return jsonify({'error': f'Failed to fetch market data: {str(e)}', 'success': False}), 500
+        return create_error_response(f'Failed to fetch market data: {str(e)}', 500)
 
 @app.route('/api/crypto/<crypto_id>')
 def crypto_detail(crypto_id):
     """Get detailed info for specific cryptocurrency"""
     try:
+        # Sanitize crypto_id
+        if not crypto_id or not crypto_id.replace('-', '').replace('_', '').isalnum():
+            return create_error_response(ERROR_MESSAGES['invalid_crypto_id'], 400)
+        
+        url = f"{COINGECKO_API_BASE}/coins/{crypto_id}"
+        response = requests.get(url, params=CRYPTO_DETAIL_PARAMS, timeout=API_TIMEOUT)
+        
+        if response.status_code == 404:
+            return create_error_response(f'{ERROR_MESSAGES["crypto_not_found"]}: "{crypto_id}"', 404)
+        elif response.status_code != 200:
+            return create_error_response(f'{ERROR_MESSAGES["api_error"]}: {response.status_code}', 502)
+        
+        data = response.json()
+        
+        return jsonify({
+            'success': True,
+            'data': data,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Crypto detail request error: {str(e)}")
+        return create_error_response(f'{ERROR_MESSAGES["network_error"]}', 502)
+    except Exception as e:
+        logger.error(f"Crypto detail error: {str(e)}")
+        return create_error_response(f'Failed to fetch crypto data: {str(e)}', 500)
+        
         url = f"{COINGECKO_API_BASE}/coins/{crypto_id}"
         params = {
             "localization": "false",
@@ -189,7 +326,13 @@ def crypto_detail(crypto_id):
             "community_data": "true",
             "developer_data": "true"
         }
-        response = requests.get(url, params=params, timeout=5)
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 404:
+            return create_error_response(f'Cryptocurrency "{crypto_id}" not found', 404)
+        elif response.status_code != 200:
+            return create_error_response(f'CoinGecko API error: {response.status_code}', 502)
+        
         data = response.json()
         
         return jsonify({
@@ -198,9 +341,12 @@ def crypto_detail(crypto_id):
             'timestamp': datetime.now().isoformat()
         })
         
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Crypto detail request error: {str(e)}")
+        return create_error_response(f'Failed to fetch crypto data: Network error', 502)
     except Exception as e:
         logger.error(f"Crypto detail error: {str(e)}")
-        return jsonify({'error': f'Failed to fetch crypto data: {str(e)}', 'success': False}), 500
+        return create_error_response(f'Failed to fetch crypto data: {str(e)}', 500)
 
 @app.route('/health')
 def health():
@@ -208,17 +354,23 @@ def health():
     return jsonify({
         'status': 'healthy',
         'model': 'gpt-4-turbo-preview',
+        'openai_client': 'initialized' if client else 'not initialized',
+        'api_key_set': bool(os.getenv('OPENAI_API_KEY')),
         'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
+        'version': '2.0.0'
     })
 
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'Endpoint not found', 'success': False}), 404
+    return create_error_response('Endpoint not found', 404)
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    return create_error_response('Method not allowed', 405)
 
 @app.errorhandler(500)
 def internal_error(error):
-    return jsonify({'error': 'Internal server error', 'success': False}), 500
+    return create_error_response('Internal server error', 500)
 
 if __name__ == '__main__':
     # Check if API key is set
@@ -228,9 +380,11 @@ if __name__ == '__main__':
         print("export OPENAI_API_KEY='your_api_key_here'")
         print("or create a .env file with: OPENAI_API_KEY=your_api_key_here")
     
-    print("🚀 Starting Crypto Research Bot...")
+    print("🚀 Starting Enhanced Crypto Research Bot...")
     print("🤖 Powered by OpenAI GPT-4 Turbo")
     print("📈 Live crypto data integration enabled")
+    print("⚡ Streaming responses & instant greetings")
+    print("🛡️  Enhanced error handling")
     print("🌐 Access the app at: http://localhost:8000")
     
     # Production settings

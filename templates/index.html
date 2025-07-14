@@ -27,8 +27,8 @@
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 1200px;
-            height: 700px;
+            max-width: 1400px;
+            height: 800px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -72,15 +72,95 @@
             overflow: hidden;
         }
 
-        .chat-section {
-            flex: 2;
+        .left-panel {
+            flex: 1;
             display: flex;
             flex-direction: column;
             border-right: 1px solid #e0e0e0;
         }
 
-        .sidebar {
+        .chart-section {
+            height: 300px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 15px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .crypto-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .crypto-input {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s ease;
+            width: 120px;
+        }
+
+        .crypto-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .timeframe-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .timeframe-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .timeframe-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .timeframe-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .timeframe-btn.active:hover {
+            background: #5a6fd8;
+        }
+
+        .chart-container {
+            height: 240px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .chat-section {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar {
+            width: 300px;
             background: #f8f9fa;
             padding: 20px;
             overflow-y: auto;
@@ -325,6 +405,37 @@
         
         <div class="main-content">
             <div class="chat-section">
+                <!-- --- NEW CHART SECTION START --- -->
+                <div style="background: #fff; border-bottom: 1px solid #eee; padding: 16px 16px 0 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <label for="cryptoInput"><b>Crypto:</b></label>
+                            <input id="cryptoInput" type="text" value="BTC" list="cryptoList" style="margin-left: 8px; padding: 4px 10px; border-radius: 12px; border: 1px solid #ccc; width: 80px;">
+                            <datalist id="cryptoList">
+                                <option value="BTC">
+                                <option value="ETH">
+                                <option value="SOL">
+                                <option value="BNB">
+                                <option value="DOGE">
+                                <option value="ADA">
+                                <option value="XRP">
+                                <option value="AVAX">
+                                <option value="MATIC">
+                            </datalist>
+                        </div>
+                        <div>
+                            <button class="timeframe-btn active" data-timeframe="1H">1H</button>
+                            <button class="timeframe-btn" data-timeframe="1D">1D</button>
+                            <button class="timeframe-btn" data-timeframe="1W">1W</button>
+                            <button class="timeframe-btn" data-timeframe="1M">1M</button>
+                            <button class="timeframe-btn" data-timeframe="1Y">1Y</button>
+                            <button class="timeframe-btn" data-timeframe="5Y">5Y</button>
+                        </div>
+                    </div>
+                    <div id="chartContainer" style="height:240px; margin-top: 10px; border-radius: 8px; border: 1px solid #eee; background: #f8f9fa;"></div>
+                </div>
+                <!-- --- NEW CHART SECTION END --- -->
+
                 <div class="chat-container" id="chatContainer">
                     <div class="message bot">
                         <div class="message-content">
@@ -427,17 +538,83 @@
         </div>
     </div>
 
+    <!-- TradingView Widget JS -->
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script>
-        const chatContainer = document.getElementById('chatContainer');
+        // --- TradingView Chart Logic ---
+        const chartContainer = document.getElementById('chartContainer');
+        const cryptoInput = document.getElementById('cryptoInput');
+        const timeframeButtons = document.querySelectorAll('.timeframe-btn');
+        function getTradingViewSymbol(crypto) {
+            const upper = crypto.trim().toUpperCase();
+            if (upper === 'BTC') return 'BINANCE:BTCUSDT';
+            if (upper === 'ETH') return 'BINANCE:ETHUSDT';
+            if (upper === 'SOL') return 'BINANCE:SOLUSDT';
+            if (upper === 'BNB') return 'BINANCE:BNBUSDT';
+            if (upper === 'DOGE') return 'BINANCE:DOGEUSDT';
+            if (upper === 'ADA') return 'BINANCE:ADAUSDT';
+            if (upper === 'XRP') return 'BINANCE:XRPUSDT';
+            if (upper === 'AVAX') return 'BINANCE:AVAXUSDT';
+            if (upper === 'MATIC') return 'BINANCE:MATICUSDT';
+            return `BINANCE:${upper}USDT`;
+        }
+        function getInterval(timeframe) {
+            switch (timeframe) {
+                case '1H': return '60';
+                case '1D': return 'D';
+                case '1W': return 'W';
+                case '1M': return 'M';
+                case '1Y': return '12M';
+                case '5Y': return '60M';
+                default: return '60';
+            }
+        }
+        function renderChart(symbol, interval) {
+            chartContainer.innerHTML = '';
+            new TradingView.widget({
+                "width": "100%",
+                "height": 220,
+                "symbol": symbol,
+                "interval": interval,
+                "timezone": "Etc/UTC",
+                "theme": "light",
+                "style": "1",
+                "locale": "en",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_top_toolbar": false,
+                "hide_legend": false,
+                "save_image": false,
+                "container_id": "chartContainer"
+            });
+        }
+        function updateChart() {
+            const crypto = cryptoInput.value.trim() || 'BTC';
+            const activeBtn = document.querySelector('.timeframe-btn.active');
+            const timeframe = activeBtn ? activeBtn.getAttribute('data-timeframe') : '1H';
+            const symbol = getTradingViewSymbol(crypto);
+            const interval = getInterval(timeframe);
+            renderChart(symbol, interval);
+        }
+        cryptoInput.addEventListener('change', updateChart);
+        timeframeButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                timeframeButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                updateChart();
+            });
+        });
+        window.addEventListener('DOMContentLoaded', updateChart);
+
+        // --- Streaming Chat Logic ---
+        const chatContainerDiv = document.getElementById('chatContainer');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
         const typingIndicator = document.getElementById('typingIndicator');
         let conversationHistory = [];
-
         function addMessage(content, isUser = false, isError = false, isSuccess = false) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
-            
             const contentDiv = document.createElement('div');
             if (isError) {
                 contentDiv.className = 'error-message';
@@ -446,16 +623,12 @@
             } else {
                 contentDiv.className = 'message-content';
             }
-            
-            // Format content with basic markdown support
             const formattedContent = formatMessage(content);
             contentDiv.innerHTML = formattedContent;
-            
             messageDiv.appendChild(contentDiv);
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            chatContainerDiv.appendChild(messageDiv);
+            chatContainerDiv.scrollTop = chatContainerDiv.scrollHeight;
         }
-
         function formatMessage(content) {
             return content
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -463,64 +636,78 @@
                 .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">$1</code>')
                 .replace(/\n/g, '<br>');
         }
-
         function showTyping() {
             typingIndicator.style.display = 'block';
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            chatContainerDiv.scrollTop = chatContainerDiv.scrollHeight;
         }
-
         function hideTyping() {
             typingIndicator.style.display = 'none';
         }
-
-        async function sendMessage() {
+        function sendMessage() {
             const message = messageInput.value.trim();
             if (!message) return;
-            
             sendButton.disabled = true;
             addMessage(message, true);
-            
-            // Add to conversation history
             conversationHistory.push({role: 'user', content: message});
-            
             messageInput.value = '';
             showTyping();
-            
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        message: message,
-                        history: conversationHistory
-                    }),
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    addMessage(data.response, false);
-                    conversationHistory.push({role: 'assistant', content: data.response});
-                } else {
-                    addMessage(data.error || 'Sorry, there was an error. Please try again.', false, true);
+            fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: message,
+                    history: conversationHistory
+                }),
+            }).then(response => {
+                if (!response.body) throw new Error('No response body');
+                const reader = response.body.getReader();
+                let aiMsg = '';
+                let botMsgDiv = document.createElement('div');
+                botMsgDiv.className = 'message bot';
+                let contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                botMsgDiv.appendChild(contentDiv);
+                chatContainerDiv.appendChild(botMsgDiv);
+                chatContainerDiv.scrollTop = chatContainerDiv.scrollHeight;
+                function readChunk() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            hideTyping();
+                            sendButton.disabled = false;
+                            messageInput.focus();
+                            if (aiMsg) conversationHistory.push({role: 'assistant', content: aiMsg});
+                            return;
+                        }
+                        const chunk = new TextDecoder().decode(value);
+                        chunk.split('\n').forEach(line => {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.replace('data: ', ''));
+                                    if (data.content) {
+                                        aiMsg += data.content;
+                                        contentDiv.innerHTML = formatMessage(aiMsg);
+                                        chatContainerDiv.scrollTop = chatContainerDiv.scrollHeight;
+                                    }
+                                } catch (e) {}
+                            }
+                        });
+                        readChunk();
+                    });
                 }
-            } catch (error) {
+                readChunk();
+            }).catch(error => {
                 addMessage('Sorry, there was an error connecting to the AI. Please try again.', false, true);
-                console.error('Error:', error);
-            } finally {
                 hideTyping();
                 sendButton.disabled = false;
                 messageInput.focus();
-            }
+            });
         }
-
         function sendSuggestion(suggestion) {
             messageInput.value = suggestion;
             sendMessage();
         }
 
+        // --- Market Data Loading Function ---
         async function loadMarketData() {
             try {
                 const response = await fetch('/api/market-data');
