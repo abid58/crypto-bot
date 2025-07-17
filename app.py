@@ -40,6 +40,21 @@ except Exception as e:
     logger.error(f"Failed to initialize OpenAI client: {e}")
     client = None
 
+# Try to import chart service (optional)
+try:
+    from chart_service import ChartService
+    chart_service = ChartService(COINGECKO_API_BASE, API_TIMEOUT)
+    CHART_AVAILABLE = True
+    logger.info("Chart service initialized successfully")
+except ImportError as e:
+    logger.warning(f"Chart service not available: {e}")
+    chart_service = None
+    CHART_AVAILABLE = False
+except Exception as e:
+    logger.error(f"Failed to initialize chart service: {e}")
+    chart_service = None
+    CHART_AVAILABLE = False
+
 def is_simple_greeting(message):
     """Check if message is a simple greeting"""
     message_lower = message.lower().strip()
@@ -348,6 +363,64 @@ def crypto_detail(crypto_id):
         logger.error(f"Crypto detail error: {str(e)}")
         return create_error_response(f'Failed to fetch crypto data: {str(e)}', 500)
 
+@app.route('/api/chart/<crypto_id>')
+def get_chart_data(crypto_id):
+    """Get chart data for a specific cryptocurrency"""
+    if not CHART_AVAILABLE or not chart_service:
+        return create_error_response('Chart functionality not available. Install plotly and pandas.', 503)
+    
+    try:
+        # Sanitize crypto_id
+        if not crypto_id or not crypto_id.replace('-', '').replace('_', '').isalnum():
+            return create_error_response(ERROR_MESSAGES['invalid_crypto_id'], 400)
+        
+        # Get timeframe from query parameters
+        timeframe = request.args.get('timeframe', '5Y')
+        timeframe_map = {
+            '1D': '1', '1W': '7', '1M': '30', '3M': '90', 
+            '1Y': '365', '5Y': '1825'
+        }
+        days = timeframe_map.get(timeframe, '1825')
+        
+        # Get chart data from service
+        result = chart_service.get_chart_data(crypto_id, days=days)
+        
+        # If API fails due to rate limiting, try mock data
+        if not result['success'] and '429' in result.get('error', ''):
+            logger.info("API rate limited, falling back to mock data")
+            result = chart_service.get_mock_chart_data(crypto_id)
+        
+        if not result['success']:
+            return create_error_response(result['error'], 400)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Chart endpoint error: {str(e)}")
+        return create_error_response(f'Failed to fetch chart data: {str(e)}', 500)
+
+@app.route('/api/chart/options')
+def get_chart_options():
+    """Get available chart options (cryptocurrencies and timeframes)"""
+    try:
+        if not CHART_AVAILABLE or not chart_service:
+            return jsonify({
+                'success': True,
+                'cryptocurrencies': [],
+                'timeframes': [],
+                'chart_available': False
+            })
+        
+        return jsonify({
+            'success': True,
+            'cryptocurrencies': chart_service.get_supported_cryptocurrencies(),
+            'timeframes': chart_service.get_timeframe_options(),
+            'chart_available': True
+        })
+    except Exception as e:
+        logger.error(f"Chart options error: {str(e)}")
+        return create_error_response(f'Failed to get chart options: {str(e)}', 500)
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
@@ -385,6 +458,10 @@ if __name__ == '__main__':
     print("📈 Live crypto data integration enabled")
     print("⚡ Streaming responses & instant greetings")
     print("🛡️  Enhanced error handling")
+    if CHART_AVAILABLE:
+        print("📊 Chart functionality enabled")
+    else:
+        print("📊 Chart functionality disabled (install plotly pandas)")
     print("🌐 Access the app at: http://localhost:8000")
     
     # Production settings
